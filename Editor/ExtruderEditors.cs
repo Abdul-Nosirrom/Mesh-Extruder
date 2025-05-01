@@ -229,7 +229,7 @@ namespace FS.MeshProcessing.Editor
 
         private bool ToggleButton(string label, bool value)
         {
-            var color = value ? Color.darkGreen : Color.darkRed;
+            var color = value ? Color.green : Color.red;
             var ogColor = GUI.backgroundColor;
             GUI.backgroundColor = color;
             var buttonResult = GUILayout.Button(label);
