@@ -1,7 +1,7 @@
 ﻿{
   "name": "com.abdulal.meshextruder",
   "author": "Abdulrahmen Almodaimegh",
-  "displayName": "Shell Texturing",
+  "displayName": "Mesh Extruder",
   "description": "Tool for extruding a mesh (preferably a 2D mesh) along its boundary edge loop.",
   "unity": "6.1",
   "version": "1.0.0",
