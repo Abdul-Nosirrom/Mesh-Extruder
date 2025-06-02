@@ -12,7 +12,7 @@ namespace FS.MeshProcessing
 #if UNITY_EDITOR
         public static event Action<GameObject> OnTransformChanged;
 
-        private void Awake()
+        private void Start()
         {
             if (Application.isPlaying) gameObject.SetActive(false);
         }
@@ -22,7 +22,7 @@ namespace FS.MeshProcessing
             if (transform.hasChanged)
             {
                 OnTransformChanged?.Invoke(gameObject);
-                transform.hasChanged = false;
+                transform.hasChanged = false; // Set after as transform might be changed by event listeners (otherwise we get stuck always true)
             }
         }
 #endif        

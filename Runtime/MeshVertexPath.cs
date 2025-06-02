@@ -35,14 +35,16 @@ namespace FS.MeshProcessing
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
+            if (m_spline == null) return;
+            
             Vector3 prevPos = Vector3.zero;
             foreach (var knot in m_spline.Knots)
             {
-                Vector3 pos = new Vector3(knot.Position.x, knot.Position.y, knot.Position.z);
+                Vector3 pos = knot.Position;
                 Gizmos.color = Color.red;
                 Gizmos.DrawSphere(pos, 0.05f);
-                Quaternion nativeRot = new Quaternion
-                    (knot.Rotation.value.x, knot.Rotation.value.y, knot.Rotation.value.z, knot.Rotation.value.w);
+
+                Quaternion nativeRot = knot.Rotation;
                 Gizmos.color = Color.green;
                 Gizmos.DrawLine(pos, pos + 0.4f * (nativeRot * Vector3.up));
 

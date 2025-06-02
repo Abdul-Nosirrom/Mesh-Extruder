@@ -33,11 +33,11 @@ namespace FS.MeshProcessing
         [SerializeField] private int m_vertex;
         public int Vertex => m_vertex;
         
-        [SerializeField, HideInInspector] private HalfEdge m_next;
+        [SerializeReference, HideInInspector] private HalfEdge m_next;
         public HalfEdge Next => m_next;
         public HalfEdge Prev => Next.Next;
         
-        [SerializeField, HideInInspector] private HalfEdge m_twin;
+        [SerializeReference, HideInInspector] private HalfEdge m_twin;
         public HalfEdge Twin => m_twin;
 
         public bool IsBoundary => Twin == null;

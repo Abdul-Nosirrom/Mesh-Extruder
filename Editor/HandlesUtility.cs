@@ -5,13 +5,13 @@ namespace FS.MeshProcessing.Editor
 {
     public static class HandlesUtility
     {
-        public static void ArcRadiusAngleHandle(Vector3 position, Quaternion rotation, float radius, float angle, out float outRadius, out float outAngle)
+        public static void ArcRadiusAngleHandle(Vector3 position, Quaternion rotation, float radius, float angle, out float outRadius, out float outAngle, float maxAngle = -1)
         {
             outRadius = LinearScaleHandle(position, rotation, radius);
-            outAngle = ArcAngleHandle(position, rotation, outRadius, angle);
+            outAngle = ArcAngleHandle(position, rotation, outRadius, angle, maxAngle);
         }
 
-        public static float ArcAngleHandle(Vector3 position, Quaternion rotation, float radius, float angle)
+        public static float ArcAngleHandle(Vector3 position, Quaternion rotation, float radius, float angle, float maxAngle = -1)
         {
             var wsRot = rotation * Quaternion.Euler(0, angle, 0);
 
@@ -43,7 +43,12 @@ namespace FS.MeshProcessing.Editor
                     angle, radius);
             }
             
-            return Handles.SnapValue(angle, EditorSnapSettings.rotate);
+            float outAngle = Handles.SnapValue(angle, EditorSnapSettings.rotate);
+            if (maxAngle > 0)
+            {
+                outAngle = Mathf.Clamp(outAngle, -maxAngle, maxAngle);
+            }
+            return outAngle;
         }
 
         public static float LinearScaleHandle(Vector3 position, Quaternion rotation, float size)

@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System;
+using UnityEditor;
 using Sirenix.OdinInspector.Editor;
 using Sirenix.Utilities.Editor;
 using UnityEngine;
@@ -6,6 +7,47 @@ using UnityEngine.Splines;
 
 namespace FS.MeshProcessing.Editor
 {
+    #region Context Menu
+
+    public static class MeshProfileCreateMenu
+    {
+        [MenuItem("GameObject/Mesh Extruder/Linear Mesh Profile Extruder", false, 10)]
+        public static void CreateLinearMeshProfileExtruder(MenuCommand menuCommand) => Create<LinearMeshProfileExtruder>(menuCommand.context as GameObject);
+        
+        [MenuItem("GameObject/Mesh Extruder/Circular Mesh Profile Extruder", false, 10)]
+        public static void CreateCircularMeshProfileExtruder(MenuCommand menuCommand) => Create<CircularMeshProfileExtruder>(menuCommand.context as GameObject);
+        
+        [MenuItem("GameObject/Mesh Extruder/Spiral Mesh Profile Extruder", false, 10)]
+        public static void CreateSpiralMeshProfileExtruder(MenuCommand menuCommand) => Create<SpiralMeshProfileExtruder>(menuCommand.context as GameObject);
+        
+        [MenuItem("GameObject/Mesh Extruder/Spline Mesh Profile Extruder", false, 10)]
+        public static void CreateSplineMeshProfileExtruder(MenuCommand menuCommand) => Create<SplineMeshProfileExtruder>(menuCommand.context as GameObject);
+
+        public static GameObject Create<T>(GameObject parentContext, MeshProfileConfig profile = null) where T : MeshProfileExtruder 
+            => Create(typeof(T), parentContext, profile);
+        
+        public static GameObject Create(Type extruderType, GameObject parentContext, MeshProfileConfig profile = null)
+        {
+            if (extruderType.IsAssignableFrom(typeof(MeshProfileConfig)))
+            {
+                Debug.LogError($"Cannot create extruder of type {extruderType.Name} as it is not a valid extruder type.");
+                return null;
+            }
+            
+            var go = new GameObject(extruderType.Name);
+            go.AddComponent(extruderType);
+            
+            // Ensure it gets reparented if this was a context click (otherwise does nothing)
+            GameObjectUtility.SetParentAndAlign(go, parentContext);
+            
+            Undo.RegisterCreatedObjectUndo(go, $"Create {extruderType.Name}");
+            Selection.activeGameObject = go;
+            return go;
+        } 
+    }
+    
+    #endregion
+    
     #region Base
 
     [CustomEditor(typeof(MeshProfileExtruder))]
@@ -19,18 +61,39 @@ namespace FS.MeshProcessing.Editor
             base.OnEnable();
             m_flipNormalsProperty = serializedObject.FindProperty("m_flipNormals");
             m_groundSnappingProperty = serializedObject.FindProperty("m_snapToGround");
+
+            Tree.OnPropertyValueChanged += MaybeProfileChanged;
+        }
+
+        protected override void OnDisable()
+        {
+            Tree.OnPropertyValueChanged -= MaybeProfileChanged;
+            base.OnDisable();
+        }
+
+        private void ResetProfile()
+        {
+            Undo.RecordObject(target, "Reset Profile");
+
+            var extruder = target as MeshProfileExtruder;
+            extruder.ResetProfile();
+                
+            EditorUtility.SetDirty(target);
+        }
+
+        private void MaybeProfileChanged(InspectorProperty property, int selectionIndex)
+        {
+            if (property.Name == "m_meshProfile")
+            {
+                ResetProfile();
+            }
         }
 
         public override void OnInspectorGUI()
         {
             if (GUILayout.Button("Reset Profile"))
             {
-                Undo.RecordObject(target, "Reset Profile");
-
-                var extruder = target as MeshProfileExtruder;
-                extruder.ResetProfile();
-                
-                EditorUtility.SetDirty(target);
+                ResetProfile();
             }
 
             base.OnInspectorGUI();
@@ -106,7 +169,7 @@ namespace FS.MeshProcessing.Editor
             CircularMeshProfileExtruder extruder = (CircularMeshProfileExtruder)target;
             EditorGUI.BeginChangeCheck();
             
-            HandlesUtility.ArcRadiusAngleHandle(extruder.transform.position, extruder.transform.rotation, extruder.m_radius, extruder.m_angle, out var radius, out var angle);
+            HandlesUtility.ArcRadiusAngleHandle(extruder.transform.position, extruder.transform.rotation, extruder.m_radius, extruder.m_angle, out var radius, out var angle, 360);
 
             if (EditorGUI.EndChangeCheck())
             {

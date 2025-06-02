@@ -19,10 +19,17 @@ namespace FS.MeshProcessing
         private const string k_meshGenName = "_GENERATED_";
         
         [SerializeField, Required] 
-        private MeshProfileConfig m_meshProfile;
-#if UNITY_EDITOR // For validation purposes
-        private MeshProfileConfig m_prevMeshProfile;
-#endif
+        protected MeshProfileConfig m_meshProfile;
+        public MeshProfileConfig MeshProfile
+        {
+            get => m_meshProfile;
+            set
+            {
+                if (m_meshProfile == value) return;
+                m_meshProfile = value;
+                m_needsRegenerationFull = true;
+            }
+        }
         
         [SerializeField] 
         private bool m_realTimeUpdate = true;
@@ -51,10 +58,10 @@ namespace FS.MeshProcessing
         [SerializeField] private bool m_generateCollision;
         [TabGroup("Additional Features")]
         [SerializeField, EnableIf("m_generateCollision")]
-        private bool m_collisionIsTrigger;
+        private bool m_isTrigger;
 
-        [SerializeField] private GameObject m_generatedMesh;
-        [SerializeField] private GameObject m_editableProfileObject;
+        [SerializeField] protected GameObject m_generatedMesh;
+        [SerializeField] protected GameObject m_editableProfileObject;
         
         [SerializeField, HideInInspector] private Mesh m_mesh;
         public Mesh GeneratedMesh => m_mesh;
@@ -80,23 +87,33 @@ namespace FS.MeshProcessing
         protected bool m_needsRegenerationFull;
         // Doesnt recalculate extrusion matrices
         protected bool m_needsRegenerationPartial;
+
+        protected bool m_needsProfileReset = false;
+        
+        // https://docs.unity3d.com/6000.1/Documentation/Manual/configurable-enter-play-mode-details.html
         
         #region MONOBEHAVIOR
         
         private void Awake()
         {
+            if (Application.isPlaying) return;
+            
             if (m_mesh == null)
             {
                 m_mesh = new Mesh();
                 m_mesh.name = $"PCG_{gameObject.name}";
                 m_mesh.hideFlags = HideFlags.HideAndDontSave;
+                m_needsRegenerationFull = true;
             }
-
-            m_needsRegenerationFull = true;
         }
         
         private void OnDestroy()
         {
+            // TODO: If we ever need to destroy shit during editor playmode
+#if UNITY_EDITOR            
+            if (!Application.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode) return;
+#endif
+            
             DestroyImmediate(m_mesh);
             
             if (m_generatedMesh != null)
@@ -110,20 +127,28 @@ namespace FS.MeshProcessing
         
         private void OnValidate()
         {
-            if (m_meshProfile != m_prevMeshProfile)
-            {
-                ResetProfile();
-                m_prevMeshProfile = m_meshProfile;
-            }
+#if UNITY_EDITOR            
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+#endif
+
             m_needsRegenerationFull = true;
         }
 
         protected virtual void Update()
         {
+            // TODO: This keeps updating in playmode for some reason, 
+            if (Application.isPlaying) return;
+            
             if (transform.hasChanged)
             {
                 m_needsRegenerationPartial = true;
                 transform.hasChanged = false;
+            }
+            
+            if (m_needsProfileReset)
+            {
+                ResetProfile();
+                m_needsProfileReset = false;
             }
 
             if (m_needsRegenerationFull)
@@ -167,6 +192,7 @@ namespace FS.MeshProcessing
         {
             if (profileObject != m_editableProfileObject) return;
 
+            ValidateProfilesTransform();
             m_needsRegenerationPartial = true;
         }
         
@@ -185,15 +211,12 @@ namespace FS.MeshProcessing
         {
             if (m_meshProfile == null || m_meshProfile.ProfileMesh == null) return;
             
-            EnsureProfilePreviewIsValid();
-            EnsureGeneratedMeshIsValid();
-            
-            
             if (regenMatrices) GenerateExtrusionMatrices();
 
             if (m_extrusionSegments.Count == 0) return;
             
-            ValidateProfilesTransform();
+            EnsureProfilePreviewIsValid();
+            EnsureGeneratedMeshIsValid();
             
             ValidateOverrideMaterials();
 
@@ -220,6 +243,7 @@ namespace FS.MeshProcessing
             // In case it was removed, lets just ensure they exist again
             if (!m_generatedMesh.GetOrAddComponent<MeshFilter>(out var meshFilter))
                 meshFilter.sharedMesh = GeneratedMesh;
+            else if (meshFilter.sharedMesh == null) meshFilter.sharedMesh = GeneratedMesh;
             m_generatedMesh.GetOrAddComponent<MeshRenderer>();
             
             // Ensure proper Tag & Physics Layer
@@ -234,16 +258,20 @@ namespace FS.MeshProcessing
 
         public void ResetProfile()
         {
+            Debug.LogError("RESETTING PROFILE!");
             if (m_editableProfileObject != null)
             {
-                DestroyImmediate(m_editableProfileObject);
+                if (Application.isPlaying) Destroy(m_editableProfileObject);
+                else DestroyImmediate(m_editableProfileObject);
                 m_editableProfileObject = null;
                 
             }
 
             if (m_generatedMesh != null)
             {
-                DestroyImmediate(m_generatedMesh);
+                if (Application.isPlaying) Destroy(m_generatedMesh);
+                else DestroyImmediate(m_generatedMesh);
+
                 m_generatedMesh = null;
             }
 
@@ -260,9 +288,12 @@ namespace FS.MeshProcessing
                 m_editableProfileObject.name = $"_PROFILE_{m_meshProfile.name}";
                 m_editableProfileObject.tag = "EditorOnly";
             }
-            
+
             if (m_editableProfileObject.transform.parent != transform)
+            {
                 m_editableProfileObject.transform.SetParent(transform, false);
+                ValidateProfilesTransform();
+            }
             
             // In case it was removed, lets just ensure they exist again
             var meshFilter = m_editableProfileObject.GetOrAddComponent<MeshFilter>();
@@ -278,6 +309,8 @@ namespace FS.MeshProcessing
         // TODO: This needs to be fixed up, allowing for planar transforms and the like
         protected void ValidateProfilesTransform()
         {
+            if (m_extrusionSegments.Count == 0 || !m_editableProfileObject) return;
+
             var firstMatrix = m_extrusionSegments[0];
             m_editableProfileObject.transform.localRotation = firstMatrix.rotation * m_meshProfile.m_rotation;
 
@@ -310,7 +343,10 @@ namespace FS.MeshProcessing
             if (!shouldHave)
             {
                 if (m_generatedMesh.TryGetComponent<T>(out var comp))
-                    Destroy(comp);
+                {
+                    if (Application.isPlaying) Destroy(comp);
+                    else DestroyImmediate(comp);
+                }
                 return false; // Comp shouldnt exist
             }
             
@@ -329,14 +365,33 @@ namespace FS.MeshProcessing
                 if (meshCollider.sharedMesh != GeneratedMesh)
                     meshCollider.sharedMesh = GeneratedMesh;
 
-                meshCollider.isTrigger = m_collisionIsTrigger;
+                if (m_isTrigger)
+                {
+                    meshCollider.isTrigger = m_isTrigger;
+                    meshCollider.convex = true;
+                }
+                else
+                {
+                    meshCollider.isTrigger = false;
+                    meshCollider.convex = false;
+                }
+
+                m_generatedMesh.isStatic = true;
             }
         }
         #endregion
 
         #region MESH GENERATION        
         protected abstract void GenerateExtrusionMatrices();
+        protected virtual void EvaluateVertexPath(MeshVertexPath vertexPath) {}
+        
+        /// <summary>
+        /// Allows you to modify the extrusion settings before the extrusion is performed. For example, for a spline extrusion,
+        /// you might want to disable end caps if the spline is closed
+        /// </summary>
+        protected virtual void ModifyExtrusionSettings(ref MeshProcessing.ExtrusionSettings extrusionSettings) {}
 
+        private RaycastHit[] m_groundHits = new RaycastHit[10];
         protected Matrix4x4 ApplyGroundSnappingToMatrix(Matrix4x4 matrix)
         {
             if (!m_snapToGround) return matrix;
@@ -364,13 +419,20 @@ namespace FS.MeshProcessing
             
             Ray ray = new Ray(raycastStart, raycastDir);
 
-            if (Physics.Raycast(ray, out var hit, Mathf.Infinity))
+            // Ignore self collision
+            if (Physics.RaycastNonAlloc(ray, m_groundHits, Mathf.Infinity) > 0)
             {
-                // We need to apply the translation to the matrix
-                float dist = Vector3.Dot(snapPointWS - hit.point, raycastDir);
-                float scaleFactor = dist / extentsWS;
+                foreach (var hit in m_groundHits)
+                {
+                    if (hit.collider != null && m_generatedMesh != null && hit.collider.gameObject == m_generatedMesh) continue;
+                    
+                    // We need to apply the translation to the matrix
+                    float dist = Vector3.Dot(snapPointWS - hit.point, raycastDir);
+                    float scaleFactor = dist / extentsWS;
                 
-                scaleMatrix = Matrix4x4.Scale(new Vector3(1, scaleFactor, 1));
+                    scaleMatrix = Matrix4x4.Scale(new Vector3(1, scaleFactor, 1));
+                    break;
+                }
             }
             
             // Need to have a selectable vertex as well for which one to apply ground snapping to (or better yet, one of the corners of the bounds?)
@@ -404,11 +466,14 @@ namespace FS.MeshProcessing
             
             
 #if UNITY_EDITOR
-            if (!Application.isPlaying) Undo.RecordObject(m_editableProfileObject, $"Extruded Profile Mesh {m_editableProfileObject.name}");
+            // We only want to dirty the object if the extrusion was triggered by an actual modification. Otherwise the scene always gets dirty on playmode changes we we trigger OnValidate and extrude the profile, always setting it to dirty.
+            bool isDirty = EditorUtility.IsDirty(this); 
+            if (!Application.isPlaying && isDirty) Undo.RecordObject(m_editableProfileObject, $"Extruded Profile Mesh {m_editableProfileObject.name}");
 #endif 
             
             // Perform extrusion TODO: UVS!
             var extrusionSettings = new MeshProcessing.ExtrusionSettings(!m_hideStartCap, !m_hideEndCap, m_flipNormals, Vector2.one, Vector2.zero);
+            ModifyExtrusionSettings(ref extrusionSettings);
             MeshProcessing.ExtrudeMesh(m_editableProfileObject.GetComponent<MeshFilter>().sharedMesh, m_mesh, extrusionMatrices, extrusionSettings);
             
             // Generate vertex path
@@ -421,16 +486,17 @@ namespace FS.MeshProcessing
                 for (int v = 0; v < extrusionMatrices.Length; v++)
                 {
                     vertexKnots[v] = new BezierKnot((transform.localToWorldMatrix * extrusionMatrices[v]).MultiplyPoint(pathPoint));
-                    vertexKnots[v].Rotation = extrusionMatrices[v].rotation;
+                    vertexKnots[v].Rotation = transform.rotation * extrusionMatrices[v].rotation * Quaternion.Inverse(m_meshProfile.m_rotation);
                 }
                 vertexPath.SetVertexPath(vertexKnots);
+                EvaluateVertexPath(vertexPath);
             }
             
             // Set Materials
             m_generatedMesh.GetComponent<MeshRenderer>().materials = m_overrideMaterials;
 
 #if UNITY_EDITOR
-            if (!Application.isPlaying)
+            if (!Application.isPlaying && isDirty)
             {
                 EditorUtility.SetDirty(m_editableProfileObject);
             }

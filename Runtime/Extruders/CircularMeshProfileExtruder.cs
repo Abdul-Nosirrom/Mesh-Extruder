@@ -9,6 +9,8 @@ namespace FS.MeshProcessing
         [ReadOnly] public float m_radius = 1f;
         [ReadOnly] public float m_angle = 30;
         
+        public bool IsClosed => Mathf.Abs(Mathf.FloorToInt(m_angle)) == 360;
+        
         protected override void GenerateExtrusionMatrices()
         {
             m_extrusionSegments.Clear();
@@ -31,6 +33,20 @@ namespace FS.MeshProcessing
             }
             
             ValidateProfilesTransform();        
+        }
+
+        protected override void EvaluateVertexPath(MeshVertexPath vertexPath)
+        {
+            vertexPath.m_spline.Closed = IsClosed;
+        }
+        
+        protected override void ModifyExtrusionSettings(ref MeshProcessing.ExtrusionSettings extrusionSettings)
+        {
+            if (IsClosed)
+            {
+                extrusionSettings.BuildStartCap = false;
+                extrusionSettings.BuildEndCap = false;
+            }
         }
     }
 }
