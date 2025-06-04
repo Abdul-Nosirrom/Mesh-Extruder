@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Sirenix.OdinInspector;
-using Sirenix.OdinInspector.Editor;
 using UnityEditor;
-using UnityEditor.ProBuilder;
 using UnityEngine;
-using UnityEngine.ProBuilder;
-using HandleUtility = UnityEditor.HandleUtility;
 using Math = System.Math;
 using Random = UnityEngine.Random;
+
+#if UNITY_EDITOR
+using Sirenix.OdinInspector.Editor;
+#endif
 
 namespace FS.MeshProcessing
 {

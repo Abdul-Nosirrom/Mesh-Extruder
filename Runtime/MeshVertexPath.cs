@@ -17,6 +17,7 @@ namespace FS.MeshProcessing
     
     public class MeshVertexPath : MonoBehaviour, ISplineProvider
     {
+        [field: SerializeField]
         public Spline m_spline { get; private set; }
 
         public Spline GetSpline() => m_spline;

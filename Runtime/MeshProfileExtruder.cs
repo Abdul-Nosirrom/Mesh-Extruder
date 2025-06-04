@@ -1,14 +1,14 @@
 ﻿using System.Collections.Generic;
 using FS.MeshProcessing.Utility;
 using Sirenix.OdinInspector;
-using Sirenix.OdinInspector.Editor;
-using Sirenix.Utilities.Editor;
 using UnityEditor;
-using UnityEditor.ProBuilder;
 using UnityEngine;
 using UnityEngine.ProBuilder;
 using UnityEngine.Splines;
-using EditorUtility = UnityEditor.EditorUtility;
+
+#if UNITY_EDITOR
+using UnityEditor.ProBuilder;
+#endif
 
 namespace FS.MeshProcessing
 {
@@ -102,18 +102,12 @@ namespace FS.MeshProcessing
             {
                 m_mesh = new Mesh();
                 m_mesh.name = $"PCG_{gameObject.name}";
-                m_mesh.hideFlags = HideFlags.HideAndDontSave;
                 m_needsRegenerationFull = true;
             }
         }
         
         private void OnDestroy()
         {
-            // TODO: If we ever need to destroy shit during editor playmode
-#if UNITY_EDITOR            
-            if (!Application.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode) return;
-#endif
-            
             DestroyImmediate(m_mesh);
             
             if (m_generatedMesh != null)
@@ -122,8 +116,6 @@ namespace FS.MeshProcessing
             if (m_editableProfileObject != null)
                 DestroyImmediate(m_editableProfileObject);
         }
-        
-#if UNITY_EDITOR
         
         private void OnValidate()
         {
@@ -168,16 +160,20 @@ namespace FS.MeshProcessing
         {
             MeshProfileConfig.OnModified += OnMeshProfileModified;
             TransformChangedDetector.OnTransformChanged += OnProfileTransformModified;
+#if UNITY_EDITOR            
             ProBuilderEditor.afterMeshModification += OnProfileMeshModified;
+#endif            
         }
 
         protected virtual void OnDisable()
         {
             MeshProfileConfig.OnModified -= OnMeshProfileModified;
             TransformChangedDetector.OnTransformChanged -= OnProfileTransformModified;
+#if UNITY_EDITOR            
             ProBuilderEditor.afterMeshModification -= OnProfileMeshModified;
+#endif            
         }
-#endif
+
         #endregion
         
         #region EVENT LISTENERS
@@ -302,8 +298,8 @@ namespace FS.MeshProcessing
             
             if (m_meshProfile != null && meshFilter.sharedMesh == null)
                 meshFilter.sharedMesh = m_meshProfile.ProfileMesh;
-            
-            meshRenderer.material = m_previewMaterial;
+
+            meshRenderer.sharedMaterial = m_previewMaterial;
         }
 
         // TODO: This needs to be fixed up, allowing for planar transforms and the like
@@ -467,7 +463,7 @@ namespace FS.MeshProcessing
             
 #if UNITY_EDITOR
             // We only want to dirty the object if the extrusion was triggered by an actual modification. Otherwise the scene always gets dirty on playmode changes we we trigger OnValidate and extrude the profile, always setting it to dirty.
-            bool isDirty = EditorUtility.IsDirty(this); 
+            bool isDirty = UnityEditor.EditorUtility.IsDirty(this); 
             if (!Application.isPlaying && isDirty) Undo.RecordObject(m_editableProfileObject, $"Extruded Profile Mesh {m_editableProfileObject.name}");
 #endif 
             
@@ -498,7 +494,7 @@ namespace FS.MeshProcessing
 #if UNITY_EDITOR
             if (!Application.isPlaying && isDirty)
             {
-                EditorUtility.SetDirty(m_editableProfileObject);
+                UnityEditor.EditorUtility.SetDirty(m_editableProfileObject);
             }
 #endif
         }

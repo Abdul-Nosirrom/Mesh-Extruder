@@ -9,9 +9,9 @@ namespace FS.MeshProcessing
     [ExecuteInEditMode]
     public class TransformChangedDetector : MonoBehaviour
     {
-#if UNITY_EDITOR
         public static event Action<GameObject> OnTransformChanged;
 
+#if UNITY_EDITOR
         private void Start()
         {
             if (Application.isPlaying) gameObject.SetActive(false);

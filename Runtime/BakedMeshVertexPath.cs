@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using Sirenix.OdinInspector;
-using Sirenix.OdinInspector.Editor;
 using UnityEditor;
-using UnityEditor.ProBuilder;
 using UnityEngine;
 using UnityEngine.ProBuilder;
 using UnityEngine.Splines;
-using EditorUtility = UnityEditor.EditorUtility;
+
+#if UNITY_EDITOR
+using Sirenix.OdinInspector.Editor;
+#endif
 
 namespace FS.MeshProcessing
 {
@@ -36,6 +35,12 @@ namespace FS.MeshProcessing
             }
         }
 
+        [Button("Regenerate Spline")]
+        private void RegnerateSpline()
+        {
+            GenerateSpline();
+        }
+
         [Button("Bake Edge Spline")]
         private void SetupEdgeSpline()
         {
@@ -45,16 +50,30 @@ namespace FS.MeshProcessing
         
         public void UpdateEdgeSelection()
         {
+#if UNITY_EDITOR
+            Undo.RecordObject(this, "Generating Edge Mesh Spline");            
+#endif
             if (m_mesh == null) return;
             m_edgeSelection = m_mesh.selectedEdges.ToArray();
+            
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(this);            
+#endif
         }
         
         public void GenerateSpline()
         {
+#if UNITY_EDITOR
+            if (!Application.isPlaying) Undo.RecordObject(this, "Generating Edge Mesh Spline");            
+#endif
             m_spline ??= new();
             m_spline.Clear();
-            
-            if (m_mesh == null) return;
+
+            if (m_mesh == null)
+            {
+                Debug.LogError($"[{gameObject.name}] Attempting to generate spline with no mesh being set");
+                return;
+            }
             
             if (m_edgeSelection == null || m_edgeSelection.Length <= 1)
             {
@@ -80,6 +99,10 @@ namespace FS.MeshProcessing
 
                 m_spline.Add(knot);
             }
+            
+#if UNITY_EDITOR
+            if (!Application.isPlaying) EditorUtility.SetDirty(this);            
+#endif
         }
 
         public Spline GetSpline() => m_spline;
