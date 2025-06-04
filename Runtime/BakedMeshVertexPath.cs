@@ -34,38 +34,9 @@ namespace FS.MeshProcessing
                 transform.hasChanged = false;
             }
         }
-
-        [Button("Regenerate Spline")]
-        private void RegnerateSpline()
-        {
-            GenerateSpline();
-        }
-
-        [Button("Bake Edge Spline")]
-        private void SetupEdgeSpline()
-        {
-            UpdateEdgeSelection();
-            GenerateSpline();
-        }
-        
-        public void UpdateEdgeSelection()
-        {
-#if UNITY_EDITOR
-            Undo.RecordObject(this, "Generating Edge Mesh Spline");            
-#endif
-            if (m_mesh == null) return;
-            m_edgeSelection = m_mesh.selectedEdges.ToArray();
-            
-#if UNITY_EDITOR
-            EditorUtility.SetDirty(this);            
-#endif
-        }
         
         public void GenerateSpline()
         {
-#if UNITY_EDITOR
-            if (!Application.isPlaying) Undo.RecordObject(this, "Generating Edge Mesh Spline");            
-#endif
             m_spline ??= new();
             m_spline.Clear();
 
@@ -99,15 +70,35 @@ namespace FS.MeshProcessing
 
                 m_spline.Add(knot);
             }
-            
-#if UNITY_EDITOR
-            if (!Application.isPlaying) EditorUtility.SetDirty(this);            
-#endif
         }
 
         public Spline GetSpline() => m_spline;
         
 #if UNITY_EDITOR
+        
+        [Button("Regenerate Spline")]
+        private void RegnerateSpline()
+        {
+            Undo.RecordObject(this, "Generating Edge Mesh Spline");
+            GenerateSpline();
+            EditorUtility.SetDirty(this);            
+        }
+
+        [Button("Bake Edge Spline")]
+        private void SetupEdgeSpline()
+        {
+            Undo.RecordObject(this, "Generating Edge Mesh Spline");
+            UpdateEdgeSelection();
+            GenerateSpline();
+            EditorUtility.SetDirty(this);            
+        }
+        
+        public void UpdateEdgeSelection()
+        {
+            if (m_mesh == null) return;
+            m_edgeSelection = m_mesh.selectedEdges.ToArray();
+        }
+        
         private void OnDrawGizmosSelected()
         {
             if (m_spline == null) return;
