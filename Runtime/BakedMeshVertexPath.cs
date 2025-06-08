@@ -70,6 +70,13 @@ namespace FS.MeshProcessing
 
                 m_spline.Add(knot);
             }
+
+            // TODO: Add last vertex as a knot as above doesnt complete it, use directionality of the knot before it as 1 point isn't enough to derive them
+            var lastKnot = m_spline.Knots.Last();
+            var lastVertex = vertices[m_edgeSelection.Last().b];
+            var lastWorldPos = transform.TransformPoint(lastVertex.position);
+            lastKnot.Position = lastWorldPos;
+            m_spline.Add(lastKnot);
         }
 
         public Spline GetSpline() => m_spline;

@@ -17,22 +17,28 @@ namespace FS.MeshProcessing.Editor
         private static DragAndDropVisualMode OnSceneDrop(Object dropUpon, Vector3 worldPosition, Vector2 viewportPosition, Transform parentForDraggedObjects, bool perform)
         {
             MeshProfileConfig meshProfile = DragAndDrop.objectReferences[0] as MeshProfileConfig;
-            if (perform && meshProfile)
+            if (meshProfile)
             {
-                ExtruderTypeMenu(meshProfile, worldPosition, parentForDraggedObjects);
+                if (perform)
+                    ExtruderTypeMenu(meshProfile, worldPosition, parentForDraggedObjects);
+                
+                return DragAndDropVisualMode.Move;
             }
-            return DragAndDropVisualMode.Move;
+
+            return DragAndDropVisualMode.None;
         }
 
         private static DragAndDropVisualMode OnHierarchyHandler(int dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
         {
             MeshProfileConfig meshProfile = DragAndDrop.objectReferences[0] as MeshProfileConfig;
-            if (perform && meshProfile)
+            if (meshProfile)
             {
-                ExtruderTypeMenu(meshProfile, parentForDraggedObjects ? parentForDraggedObjects.transform.position : Vector3.zero, parentForDraggedObjects);
+                if (perform)
+                    ExtruderTypeMenu(meshProfile, parentForDraggedObjects ? parentForDraggedObjects.transform.position : Vector3.zero, parentForDraggedObjects);
+                return DragAndDropVisualMode.Move;
             }
 
-            return DragAndDropVisualMode.Move;
+            return DragAndDropVisualMode.None;
         }
 
         private static void ExtruderTypeMenu(MeshProfileConfig profile, Vector3 position, Transform parent)
