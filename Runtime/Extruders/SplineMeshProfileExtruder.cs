@@ -13,7 +13,20 @@ namespace FS.MeshProcessing
         [SerializeField] 
         private GameObject m_splineProvider;
         
-        public Spline m_spline => m_splineContainer?.Spline ?? (m_splineProvider?.GetComponent<ISplineProvider>())?.GetSpline();
+        public Spline m_spline
+        {
+            get
+            {
+                if (m_splineContainer) return m_splineContainer.Spline;
+                if (m_splineProvider)
+                {
+                    var provider = m_splineProvider.GetComponent<ISplineProvider>();
+                    if (provider != null) return provider.GetSpline();
+                }
+
+                return null;
+            }
+        }
 
         [SerializeField] 
         private bool m_lockTransformToSpline = true;
@@ -117,7 +130,8 @@ namespace FS.MeshProcessing
                 }
             }
             
-            base.Update();
+            if (m_spline != null)
+                base.Update();
         }
 
         private void OnDrawGizmosSelected()

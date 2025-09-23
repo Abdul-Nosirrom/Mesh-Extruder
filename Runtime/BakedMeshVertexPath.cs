@@ -46,9 +46,9 @@ namespace FS.MeshProcessing
                 return;
             }
             
-            if (m_edgeSelection == null || m_edgeSelection.Length <= 1)
+            if (m_edgeSelection == null || m_edgeSelection.Length < 1)
             {
-                Debug.LogError("No edges selected, need at least 2 edges to create a spline");
+                Debug.LogError("No edges selected, need at least 1 edge to create a spline");
                 return;
             }
 

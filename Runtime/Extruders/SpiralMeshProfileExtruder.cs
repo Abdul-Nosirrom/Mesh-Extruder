@@ -24,8 +24,14 @@ namespace FS.MeshProcessing
                 float y = m_height * ((float)i / numSegments);
                 
                 Vector3 pos = new Vector3(x, y, z);
-                Quaternion rot = Quaternion.LookRotation(new Vector3(cos, 0, -sin), Vector3.up);
-                
+                // Tangent calculation - derivative of the spiral curve
+                Vector3 tangent = new Vector3(
+                    m_radius * cos * Mathf.Deg2Rad * m_angle / numSegments,  // dx/dt
+                    m_height / numSegments,                                   // dy/dt  
+                    -m_radius * sin * Mathf.Deg2Rad * m_angle / numSegments  // dz/dt
+                ).normalized;
+        
+                Quaternion rot = Quaternion.LookRotation(tangent, Vector3.up);                
                 m_extrusionSegments.Add(Matrix4x4.TRS(pos, rot, Vector3.one));
             }
             

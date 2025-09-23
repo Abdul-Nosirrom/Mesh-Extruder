@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Numerics;
-using Unity.Mathematics;
-using UnityEditor;
+﻿using Drawing;
 using UnityEngine;
 using UnityEngine.Splines;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace FS.MeshProcessing
 {
@@ -15,13 +15,13 @@ namespace FS.MeshProcessing
         public Spline GetSpline();
     }
     
-    public class MeshVertexPath : MonoBehaviour, ISplineProvider
+    public class MeshVertexPath : MonoBehaviourGizmos, ISplineProvider
     {
         [field: SerializeField]
         public Spline m_spline { get; private set; }
 
         public Spline GetSpline() => m_spline;
-
+        
         public void SetVertexPath(BezierKnot[] vertexKnots)
         {
             m_spline ??= new();
@@ -34,29 +34,28 @@ namespace FS.MeshProcessing
         }
         
 #if UNITY_EDITOR
-        private void OnDrawGizmosSelected()
+        public override void DrawGizmos()
         {
+            if (!Selection.Contains(gameObject)) return;
             if (m_spline == null) return;
+
+            using var thickness = Draw.WithLineWidth(2);
             
             Vector3 prevPos = Vector3.zero;
+            bool first = true;
+            
             foreach (var knot in m_spline.Knots)
             {
                 Vector3 pos = knot.Position;
-                Gizmos.color = Color.red;
-                Gizmos.DrawSphere(pos, 0.05f);
+                Draw.WireSphere(pos, 0.05f, Color.red);
 
                 Quaternion nativeRot = knot.Rotation;
-                Gizmos.color = Color.green;
-                Gizmos.DrawLine(pos, pos + 0.4f * (nativeRot * Vector3.up));
-
-                if (prevPos != Vector3.zero)
-                {
-                    Handles.BeginGUI();
-                    Handles.Label(pos + nativeRot*Vector3.up, $"{Vector3.Distance(pos, prevPos)}");
-                    Handles.EndGUI();
-                }
+                Draw.Arrow(pos, pos + 0.4f * (nativeRot * Vector3.up), Color.green);
+                
+                if (!first) Draw.Line(prevPos, pos, Color.purple);
                 
                 prevPos = pos;
+                first = false;
             }
         }
 #endif        

@@ -97,7 +97,19 @@ namespace FS.MeshProcessing
         private void Awake()
         {
             if (Application.isPlaying) return;
-            
+
+            m_mesh = null;
+            EnsureMeshAssetCreation();
+            //if (m_mesh == null)
+            {
+                m_mesh = new Mesh();
+                m_mesh.name = $"PCG_{gameObject.name}";
+                m_needsRegenerationFull = true;
+            }
+        }
+
+        private void EnsureMeshAssetCreation()
+        {
             if (m_mesh == null)
             {
                 m_mesh = new Mesh();
@@ -130,6 +142,8 @@ namespace FS.MeshProcessing
         {
             // TODO: This keeps updating in playmode for some reason, 
             if (Application.isPlaying) return;
+            
+            EnsureMeshAssetCreation();
             
             if (transform.hasChanged)
             {
@@ -239,7 +253,7 @@ namespace FS.MeshProcessing
             // In case it was removed, lets just ensure they exist again
             if (!m_generatedMesh.GetOrAddComponent<MeshFilter>(out var meshFilter))
                 meshFilter.sharedMesh = GeneratedMesh;
-            else if (meshFilter.sharedMesh == null) meshFilter.sharedMesh = GeneratedMesh;
+            else if (meshFilter.sharedMesh != GeneratedMesh) meshFilter.sharedMesh = GeneratedMesh;
             m_generatedMesh.GetOrAddComponent<MeshRenderer>();
             
             // Ensure proper Tag & Physics Layer
@@ -416,18 +430,23 @@ namespace FS.MeshProcessing
             Ray ray = new Ray(raycastStart, raycastDir);
 
             // Ignore self collision
+            float closestHitDist = Mathf.Infinity;
             if (Physics.RaycastNonAlloc(ray, m_groundHits, Mathf.Infinity) > 0)
             {
                 foreach (var hit in m_groundHits)
                 {
                     if (hit.collider != null && m_generatedMesh != null && hit.collider.gameObject == m_generatedMesh) continue;
-                    
-                    // We need to apply the translation to the matrix
-                    float dist = Vector3.Dot(snapPointWS - hit.point, raycastDir);
-                    float scaleFactor = dist / extentsWS;
-                
-                    scaleMatrix = Matrix4x4.Scale(new Vector3(1, scaleFactor, 1));
-                    break;
+
+                    var hitDist = Vector3.Distance(hit.point, snapPointWS);
+                    if (hitDist < closestHitDist)
+                    {
+                        // We need to apply the translation to the matrix
+                        float dist = Vector3.Dot(snapPointWS - hit.point, raycastDir);
+                        float scaleFactor = dist / extentsWS;
+
+                        scaleMatrix = Matrix4x4.Scale(new Vector3(1, scaleFactor, 1));
+                        closestHitDist = hitDist;
+                    }
                 }
             }
             

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace FS.MeshProcessing
 {
@@ -28,17 +29,25 @@ namespace FS.MeshProcessing
     }
     
     [Serializable]
-    public class HalfEdge
+    public class HalfEdge : IEquatable<HalfEdge>
     {
         [SerializeField] private int m_vertex;
         public int Vertex => m_vertex;
+
+        [SerializeField] private int m_face;
+        public int Face => m_face;
         
         [SerializeReference, HideInInspector] private HalfEdge m_next;
         public HalfEdge Next => m_next;
-        public HalfEdge Prev => Next.Next;
+        [SerializeReference, HideInInspector] private HalfEdge m_prev;
+        public HalfEdge Prev => m_prev;
         
         [SerializeReference, HideInInspector] private HalfEdge m_twin;
         public HalfEdge Twin => m_twin;
+
+        [SerializeField] private int m_edgeIndex = -1;
+        public int EdgeIndex => m_edgeIndex;
+        
 
         public bool IsBoundary => Twin == null;
 
@@ -57,13 +66,17 @@ namespace FS.MeshProcessing
             // Initialize Half-Edges
             for (var tri = 0; tri < triangles.Length; tri += 3)
             {
-                HalfEdge edge1 = new() { m_vertex = triangles[tri] };
-                HalfEdge edge2 = new() { m_vertex = triangles[tri + 1] };
-                HalfEdge edge3 = new() { m_vertex = triangles[tri + 2] };
+                HalfEdge edge1 = new() { m_vertex = triangles[tri], m_edgeIndex = tri };
+                HalfEdge edge2 = new() { m_vertex = triangles[tri + 1], m_edgeIndex = tri + 1 };
+                HalfEdge edge3 = new() { m_vertex = triangles[tri + 2], m_edgeIndex = tri + 2 };
                 
                 edge1.m_next = edge2;
                 edge2.m_next = edge3;
                 edge3.m_next = edge1;
+                
+                edge1.m_prev = edge3;
+                edge2.m_prev = edge1;
+                edge3.m_prev = edge2;
 
                 halfEdges[tri] = (edge1);
                 halfEdges[tri + 1] = (edge2);
@@ -107,6 +120,74 @@ namespace FS.MeshProcessing
             return halfEdges;
         }
 
+        public static HalfEdge[] BakeHalfEdges(Face[] faces)
+        {
+            List<HalfEdge> halfEdges = new ();
+            
+            // Optimizing twin search by caching edge keys
+            Dictionary<EdgeKey, HalfEdge> edgeDict = new();
+            
+            // Initialize half-edges
+
+            int edgeIndex = 0;
+            for (int f = 0; f < faces.Length; f++)
+            {
+                // Create the half-edges for this face
+                var face = faces[f];
+                List<HalfEdge> faceHalfEdges = new();
+                for (int e = 0; e < face.m_edgeCount; e++)
+                {
+                    faceHalfEdges.Add(new HalfEdge()
+                    {
+                        m_vertex = face.m_vertexIndices[e], 
+                        m_edgeIndex = edgeIndex,
+                        m_face = f
+                    });
+                    edgeIndex++;
+                }
+                
+                // Link next & prev pointers, assuming face-data lays out vertices sequentially in correct winding order
+                for (int e = 0; e < face.m_edgeCount; e++)
+                {
+                    faceHalfEdges[e].m_next = faceHalfEdges[(e + 1) % face.m_edgeCount];
+                    faceHalfEdges[e].m_next.m_prev = faceHalfEdges[e];
+                    
+                    EdgeKey edge = new EdgeKey(faceHalfEdges[e].Vertex, faceHalfEdges[e].m_next.Vertex);
+                    if (edgeDict.TryGetValue(edge, out var existingEdge))
+                    {
+                        faceHalfEdges[e].m_twin = existingEdge;
+                        existingEdge.m_twin = faceHalfEdges[e];
+                    }
+                    else
+                        edgeDict[edge] = faceHalfEdges[e];
+                }
+                
+                halfEdges.AddRange(faceHalfEdges);
+            }
+
+            for (int he = 0; he < halfEdges.Count; he++)
+            {
+                halfEdges[he].m_edgeIndex = he;
+            }
+            
+            // Add edges to dictionary and find twins
+            //foreach (var edge in halfEdges)
+            //{
+            //    EdgeKey edgeKey = new EdgeKey(edge.Vertex, edge.Next.Vertex);
+            //    if (edgeDict.TryGetValue(edgeKey, out var existingEdge))
+            //    {
+            //        edge.m_twin = existingEdge;
+            //        existingEdge.m_twin = edge;
+            //    }
+            //    else
+            //    {
+            //        edgeDict[edgeKey] = edge;
+            //    }
+            //}
+            
+            return halfEdges.ToArray();
+        }
+
         /// <summary>
         /// Given a half-edge representation of a mesh, generates a list of all edges that are boundary edges.
         /// Determined by whether a half-edge has a twin or not.
@@ -117,10 +198,10 @@ namespace FS.MeshProcessing
             return halfEdges.Where(edge => edge.m_twin == null).ToArray();
         }
 
-        public HalfEdge GetAdjacentBoundaryEdge()
+        public HalfEdge GetAdjacentBoundaryEdge(bool reverse = false)
         {
-            var adjBoundary = Next;
-            while (!adjBoundary.IsBoundary) adjBoundary = adjBoundary.Twin.Next;
+            var adjBoundary = reverse ? Prev : Next;
+            while (!adjBoundary.IsBoundary) adjBoundary = reverse ? adjBoundary.Twin.Prev : adjBoundary.Twin.Next;
             return adjBoundary;
         }
 
@@ -198,6 +279,26 @@ namespace FS.MeshProcessing
         public override string ToString()
         {
             return $"Vertex: {m_vertex}\n Next: {m_next?.m_vertex}\n Twin: {m_twin?.m_vertex}";
+        }
+
+        public bool Equals(HalfEdge other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return m_vertex == other.m_vertex && m_face == other.m_face && Equals(m_next, other.m_next) && Equals(m_prev, other.m_prev);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is null) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != GetType()) return false;
+            return Equals((HalfEdge)obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(m_vertex, m_face, m_next.m_vertex, m_prev.m_vertex);
         }
     }
 }
