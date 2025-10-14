@@ -112,6 +112,7 @@ namespace FS.MeshProcessing
             SortSelectedEdges();
         }
         
+        private const int k_maxIterations = 4000;
         private void WalkRegularEdgeLoop(HalfEdge startEdge, HalfEdge endEdge)
         {
             // TODO: I dont think this works well, sometimes we dont hit the last end edge
@@ -120,22 +121,28 @@ namespace FS.MeshProcessing
             // Walk is essentially edge.next.twin.next
             
             // Backwards via Prev.Twin.Prev till we either loop around or our hueristic fails
-            while (true)
+            var ogStartEdge = startEdge;
+            int numIterations = 0;
+            while (numIterations < k_maxIterations)
             {
+                numIterations++;
                 var prev = startEdge.Prev?.Twin?.Prev;
                 if (prev == null || prev.IsBoundary) break;
 
                 var prevNextVertex = m_mesh.PreservedMesh.m_vertices[prev.Next.Vertex];
                 if (!EdgeLoopHueristic(startEdge, prev, prevNextVertex, true)) break;
-                if (prev.Equals(startEdge) || prev.Equals(endEdge)) break; // full loop or reached the end
+                if (prev.Equals(ogStartEdge) || prev.Equals(endEdge)) break; // full loop or reached the end
                 startEdge = prev;
             }
-            
+            if (numIterations >= k_maxIterations) Debug.LogError("[Edge Loop - Backward] Hit max iterations, something went wrong.");
+
             // Now iterate forwards via Next.Twin.Next
             var current = startEdge;
             HashSet<int> edgeLoop = new() { current.EdgeIndex };
-            while (true)
+            numIterations = 0;
+            while (numIterations < k_maxIterations)
             {
+                numIterations++;
                 var next = current.Next?.Twin?.Next;
                 if (next == null || next.IsBoundary) break;
                 
@@ -149,6 +156,7 @@ namespace FS.MeshProcessing
                 // Have we looped around or reached the end?
                 if (next.Equals(startEdge) || next.Equals(endEdge)) break; // full loop or reached the end
             }
+            if (numIterations >= k_maxIterations) Debug.LogError("[Edge Loop - Forward] Hit max iterations, something went wrong.");
             
             m_selectedEdges = edgeLoop.ToArray();
             SortSelectedEdges();
@@ -233,7 +241,12 @@ namespace FS.MeshProcessing
                 }
             }
 
+            bool isClosedLoop = mesh.m_halfEdges[m_selectedEdges[0]].Vertex == mesh.m_halfEdges[m_selectedEdges[^1]].Next.Vertex;
+            if (isClosedLoop)
+                Debug.LogError($"[Edge Loop] Mesh is a closed loop, setting spline to closed.");
+            
             mvp.SetVertexPath(knots);
+            mvp.m_spline.Closed = isClosedLoop;
         }
 
         private void SortSelectedEdges()
@@ -270,6 +283,7 @@ namespace FS.MeshProcessing
                         }
                     }
 
+                    // If we never update currentEdge, that indicates a possible closed loop
                     if (!hasForwardConnection)
                     {
                         currentEdge = edge;
@@ -277,18 +291,10 @@ namespace FS.MeshProcessing
                     }
                 }
 
-                if (currentEdge.Equals(default))
-                {
-                    // TODO: if closed loop, we can start anywhere, so just pick one and go
-                    Debug.LogError(
-                        "Could not find a unique starting edge, the selection may form a closed loop or be invalid.");
-                    return;
-                }
-
                 sortedEdges[0] = edgeToHalfEdgeIdx[currentEdge];
                 trackedEdges.Remove(currentEdge);
                 int idx = 1;
-                while (trackedEdges.Count > 0)
+                while (trackedEdges.Count > 0 && idx < sortedEdges.Length)
                 {
                     var nextEdge = trackedEdges.FirstOrDefault(edge => edge.a == currentEdge.b);
                     if (nextEdge.Equals(default))

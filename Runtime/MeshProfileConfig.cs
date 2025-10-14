@@ -5,6 +5,7 @@ using Sirenix.OdinInspector;
 using UnityEditor;
 using UnityEngine;
 using Math = System.Math;
+using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
 #if UNITY_EDITOR
@@ -18,6 +19,18 @@ namespace FS.MeshProcessing
     {
         [SerializeField, PreviewField] 
         private Mesh m_mesh;
+
+        [HorizontalGroup("A"), SerializeField, PhysicsLayer] 
+        public string m_defaultPhysicsLayer = "Default";
+        
+        [HorizontalGroup("A"), SerializeField, GameObjectTags]
+        public string m_defaultTag = "Untagged";
+
+        [HorizontalGroup("B"), SerializeField] 
+        public bool m_generateCollision = true;
+
+        [HorizontalGroup("B"), SerializeField] 
+        public bool m_generateVertexPath = false;
         
         [SerializeField, Range(0, 90)]
         public float m_smoothingAngle = 45f;
@@ -118,6 +131,12 @@ namespace FS.MeshProcessing
                 DestroyImmediate(m_wireFrameMat);
                 m_wireFrameMat = null;
             }
+
+            if (s_configThumbnailMaterial != null)
+            {
+                DestroyImmediate(s_configThumbnailMaterial);
+                s_configThumbnailMaterial = null;
+            }
             
             EditorApplication.update -= Update;
         }
@@ -144,7 +163,7 @@ namespace FS.MeshProcessing
             {
                 m_previewRender.BeginPreview(r, background);
                 
-                m_previewRender.DrawMesh(m_config.ProfileMesh, Vector3.zero, matrix.rotation, m_config.m_defaultMaterials[0], 0);
+                m_previewRender.DrawMesh(m_config.ProfileMesh, Vector3.zero, matrix.rotation, ConfigThumbnailMaterial, 0);
                 m_previewRender.Render();
 
                 GL.wireframe = true;
@@ -217,6 +236,35 @@ namespace FS.MeshProcessing
             }
         }
 
+        /// <summary>
+        /// Preview thumbnail renderer
+        /// </summary>
+        public override Texture2D RenderStaticPreview(string assetPath, Object[] subAssets, int width, int height)
+        {
+            if (m_config.ProfileMesh == null || m_previewRender == null) return null;
+            m_previewRender.BeginStaticPreview(new Rect(0, 0, 128, 128));
+            
+            var matrix = GetMeshTransform();
+
+            m_previewRender.camera.transform.position = matrix.MultiplyPoint(m_config.ProfileMesh.bounds.center) + Vector3.forward * m_camZoomFactor;
+            m_previewRender.camera.transform.rotation = Quaternion.identity;
+            
+            m_previewRender.camera.nearClipPlane = 0.1f;
+            m_previewRender.camera.farClipPlane = 1000f;
+
+            m_previewRender.camera.fieldOfView = 60;
+
+            m_previewRender.DrawMesh(m_config.ProfileMesh, Vector3.zero, matrix.rotation, ConfigThumbnailMaterial, 0);
+            m_previewRender.Render();
+
+            GL.wireframe = true;
+            m_previewRender.DrawMesh(m_config.ProfileMesh, Vector3.zero, matrix.rotation, m_wireFrameMat, 0);
+            m_previewRender.Render();
+            GL.wireframe = false;
+            
+            return m_previewRender.EndStaticPreview();
+        }
+
         private void DoRotationControls(Rect r)
         {
             var ogColor = GUI.backgroundColor;
@@ -278,6 +326,21 @@ namespace FS.MeshProcessing
         {
             var wireFrameCreate = typeof(MeshPreview).GetMethod("CreateWireframeMaterial", BindingFlags.Static | BindingFlags.NonPublic);
             return wireFrameCreate.Invoke(null, null) as Material;
+        }
+
+        private static Material s_configThumbnailMaterial;
+
+        public static Material ConfigThumbnailMaterial
+        {
+            get
+            {
+                if (s_configThumbnailMaterial == null)
+                {
+                    s_configThumbnailMaterial = new Material(Shader.Find("Hidden/MeshProfileThumbnail"));
+                    s_configThumbnailMaterial.hideFlags = HideFlags.HideAndDontSave;
+                }
+                return s_configThumbnailMaterial;
+            }
         }
     }
 

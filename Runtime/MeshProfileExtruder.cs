@@ -27,6 +27,13 @@ namespace FS.MeshProcessing
             {
                 if (m_meshProfile == value) return;
                 m_meshProfile = value;
+                if (m_meshProfile != null)
+                {
+                    m_generatedMeshPhysicsLayer = m_meshProfile.m_defaultPhysicsLayer;
+                    m_generatedMeshTag = m_meshProfile.m_defaultTag;
+                    m_generateVertexPath = m_meshProfile.m_generateVertexPath;
+                    m_generateCollision = m_meshProfile.m_generateCollision;
+                }
                 m_needsRegenerationFull = true;
             }
         }

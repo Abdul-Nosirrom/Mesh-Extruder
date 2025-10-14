@@ -22,19 +22,28 @@ namespace FS.MeshProcessing
         {
             if (property.propertyType == SerializedPropertyType.String)
             {
+                EditorGUI.BeginProperty(position, label, property);
+                
                 string[] tags = UnityEditorInternal.InternalEditorUtility.tags;
                 int selectedIndex = Array.IndexOf(tags, property.stringValue);
                 
+                EditorGUI.BeginChangeCheck();
+                
                 // Create a dropdown for the tags
                 selectedIndex = EditorGUI.Popup(position, label.text, selectedIndex, tags);
-                
-                // Set the selected tag as the property value
-                if (selectedIndex >= 0 && selectedIndex < tags.Length)
+
+                if (EditorGUI.EndChangeCheck())
                 {
-                    property.serializedObject.Update();
-                    property.stringValue = tags[selectedIndex];
-                    property.serializedObject.ApplyModifiedProperties();
+                    // Set the selected tag as the property value
+                    if (selectedIndex >= 0 && selectedIndex < tags.Length)
+                    {
+                        property.serializedObject.Update();
+                        property.stringValue = tags[selectedIndex];
+                        property.serializedObject.ApplyModifiedProperties();
+                    }
                 }
+
+                EditorGUI.EndProperty();
             }
             else
             {
@@ -49,21 +58,31 @@ namespace FS.MeshProcessing
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            if (property.propertyType == SerializedPropertyType.String)
+            if (property.propertyType == SerializedPropertyType.String || property.propertyType == SerializedPropertyType.Integer)
             {
+                EditorGUI.BeginProperty(position, label, property);
+                
                 string[] layers = UnityEditorInternal.InternalEditorUtility.layers;
-                int selectedIndex = Array.IndexOf(layers, property.stringValue);
+                int selectedIndex = property.propertyType == SerializedPropertyType.Integer ? property.intValue : Array.IndexOf(layers, property.stringValue);
+                
+                EditorGUI.BeginChangeCheck();
                 
                 // Create a dropdown for the tags
                 selectedIndex = EditorGUI.Popup(position, label.text, selectedIndex, layers);
-                
-                // Set the selected tag as the property value
-                if (selectedIndex >= 0 && selectedIndex < layers.Length)
+
+                if (EditorGUI.EndChangeCheck())
                 {
-                    property.serializedObject.Update();
-                    property.stringValue = layers[selectedIndex];
-                    property.serializedObject.ApplyModifiedProperties();
+                    // Set the selected tag as the property value
+                    if (selectedIndex >= 0 && selectedIndex < layers.Length)
+                    {
+                        property.serializedObject.Update();
+                        if (property.propertyType == SerializedPropertyType.String) property.stringValue = layers[selectedIndex];
+                        if (property.propertyType == SerializedPropertyType.Integer) property.intValue = selectedIndex;
+                        property.serializedObject.ApplyModifiedProperties();
+                    }
                 }
+
+                EditorGUI.EndProperty();
             }
             else
             {

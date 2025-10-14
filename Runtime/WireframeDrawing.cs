@@ -1,11 +1,10 @@
-﻿using System;
-using System.Runtime.InteropServices;
-using Drawing;
-using UnityEditor;
-using UnityEngine;
-using UnityEngine.Experimental.Rendering;
+﻿using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace FS.MeshProcessing
 {
@@ -123,6 +122,14 @@ namespace FS.MeshProcessing
             }
         }
         
+        #if UNITY_EDITOR
+        private static Rect m_viewPort => SceneView.currentDrawingSceneView.cameraViewport;
+        private static Camera m_camera => SceneView.currentDrawingSceneView.camera;
+        #else
+        private static Rect m_viewPort => Camera.main.rect;
+        private static Camera m_camera => Camera.main;
+        #endif
+        
 
         public static void DrawWireframe(GraphicsBuffer edgeBuffer, Matrix4x4 localToWorld)
         {
@@ -133,7 +140,7 @@ namespace FS.MeshProcessing
             mp.SetBuffer("_EdgeBuffer", edgeBuffer);
 
             {
-                var viewport = SceneView.currentDrawingSceneView.cameraViewport;
+                var viewport = m_viewPort;
                 var viewportSize = new Vector2Int((int)viewport.width, (int)viewport.height);
                 if (SelectionIDTexture.width != viewportSize.x || SelectionIDTexture.height != viewportSize.y)
                 {
@@ -144,7 +151,7 @@ namespace FS.MeshProcessing
                 }
                 
                 CommandBuffer.Clear();
-                var cam = SceneView.currentDrawingSceneView.camera;
+                var cam = m_camera;
 
                 var camColor = new RenderTargetIdentifier(BuiltinRenderTextureType.CameraTarget);
                 var selectionIDs = new RenderTargetIdentifier(SelectionIDTexture);

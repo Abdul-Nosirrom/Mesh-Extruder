@@ -50,6 +50,7 @@ namespace FS.MeshProcessing.Editor
     
     #region Base
 
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(MeshProfileExtruder))]
     public class MeshProfileExtruderEditor : OdinEditor
     {
@@ -73,12 +74,15 @@ namespace FS.MeshProcessing.Editor
 
         private void ResetProfile()
         {
-            Undo.RecordObject(target, "Reset Profile");
-
-            var extruder = target as MeshProfileExtruder;
-            extruder.ResetProfile();
+            foreach (var t in targets)
+            {
+                Undo.RecordObject(t, "Reset Profile");
                 
-            EditorUtility.SetDirty(target);
+                var extruder = t as MeshProfileExtruder;
+                extruder.ResetProfile();
+                
+                EditorUtility.SetDirty(t);
+            }
         }
 
         private void MaybeProfileChanged(InspectorProperty property, int selectionIndex)
@@ -133,6 +137,7 @@ namespace FS.MeshProcessing.Editor
 
     #region Linear
 
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(LinearMeshProfileExtruder))]
     public class LinearMeshProfileExtruderEditor : MeshProfileExtruderEditor
     {
@@ -159,6 +164,7 @@ namespace FS.MeshProcessing.Editor
 
     #region Circular
 
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(CircularMeshProfileExtruder))]
     public class CircularMeshProfileExtruderEditor : MeshProfileExtruderEditor
     {
@@ -185,6 +191,7 @@ namespace FS.MeshProcessing.Editor
 
     #region Spiral
 
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(SpiralMeshProfileExtruder))]
     public class SpiralMeshProfileExtruderEditor : MeshProfileExtruderEditor
     {
@@ -216,6 +223,7 @@ namespace FS.MeshProcessing.Editor
 
     #region Spline
 
+    [CanEditMultipleObjects]
     [CustomEditor(typeof(SplineMeshProfileExtruder))]
     public class SplineMeshProfileExtruderEditor : MeshProfileExtruderEditor
     {
