@@ -507,10 +507,10 @@ namespace FS.MeshProcessing
                 var pathPoint = m_editableProfileObject.GetComponent<MeshFilter>().sharedMesh.vertices[m_meshProfile.m_vertexPathIdx];
                 for (int v = 0; v < extrusionMatrices.Length; v++)
                 {
-                    vertexKnots[v] = new BezierKnot((transform.localToWorldMatrix * extrusionMatrices[v]).MultiplyPoint(pathPoint));
-                    vertexKnots[v].Rotation = transform.rotation * extrusionMatrices[v].rotation * Quaternion.Inverse(m_meshProfile.m_rotation);
+                    vertexKnots[v] = new BezierKnot(extrusionMatrices[v].MultiplyPoint(pathPoint));
+                    vertexKnots[v].Rotation = extrusionMatrices[v].rotation * Quaternion.Inverse(m_meshProfile.m_rotation);
                 }
-                vertexPath.SetVertexPath(vertexKnots);
+                vertexPath.SetLocalSpaceVertexPath(vertexKnots);
                 EvaluateVertexPath(vertexPath);
             }
             

@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 using Assimp;
+using FS.MeshProcessing.Utility;
 using Unity.Mathematics;
 
 namespace FS.MeshProcessing.Editor
@@ -21,30 +22,7 @@ namespace FS.MeshProcessing.Editor
 
         public override void OnInspectorGUI()
         {
-            var mesh = m_target.PreservedMesh;
-            if (mesh == null)
-            {
-                EditorGUILayout.HelpBox("Incompatible gameobject, preserved mesh is setup upon import!", MessageType.Error);
-                return;
-            }
-            
-            GUILayout.BeginVertical(EditorStyles.helpBox);
-            
-            GUILayout.Label($"[{mesh.m_name}] Mesh Info", EditorStyles.whiteLargeLabel);
-            
-            GUILayout.Label($"Vertex Count: {mesh.m_vertices.Length}");
-            GUILayout.Label($"Face Count: {mesh.m_faces.Length}");
-            GUILayout.Label($"HalfEdge Count: {mesh.m_halfEdges?.Length ?? -1}");
-
-            GUILayout.Space(10);
-            
-            GUILayout.Label("___________");
-            
-            GUILayout.Label($"Tri Count: {mesh.m_triangleCount}");
-            GUILayout.Label($"Quad Count: {mesh.m_quadCount}");
-            GUILayout.Label($"NGon Count: {mesh.m_nGonCount}");
-            
-            GUILayout.EndVertical();
+            m_target.DoGUI();
         }
     }
     
@@ -52,6 +30,7 @@ namespace FS.MeshProcessing.Editor
     {
         //public bool PreserveTopology = true;
 
+        // We should differentiate prefixes because w/ hmr for example we apply scaling, otherwise we dont
         private const string k_filePrefix = "hmr_";
         private const string k_meshPrefix = "preserve";
         
@@ -65,13 +44,33 @@ namespace FS.MeshProcessing.Editor
 
         private void OnPostprocessModel(GameObject g)
         {
+            Dictionary<string, PreservedMeshAsset> processedMeshes = new();
+            
             // Read the source file of the mesh
             foreach (var mesh in m_preservedMeshes)
             {
                 var child = g.transform.Find(mesh.Key);
                 if (child)
                 {
-                    child.gameObject.AddComponent<MeshTopologyPreserver>().SetMesh(mesh.Value);
+                    var meshFilter = child.GetComponent<MeshFilter>();
+                    if (meshFilter == null) continue;
+
+                    // We wanna set the PreservedMeshAsset as a sub-asset of the actual model asset
+                    var meshAsset = meshFilter.sharedMesh;
+                    var meshName = meshAsset.name;
+                    var preservedMeshName = $"[Preserved Topology] {meshName}";
+                    
+                    // Does the asset already exist? Taking into account our degeneracy handler
+                    if (!processedMeshes.ContainsKey(preservedMeshName))
+                    {
+                        var preservedMeshAsset = ScriptableObject.CreateInstance<PreservedMeshAsset>();
+                        preservedMeshAsset.name = preservedMeshName;
+                        preservedMeshAsset.SetMesh(mesh.Value);
+                        context.AddObjectToAsset(preservedMeshName, preservedMeshAsset);
+                        processedMeshes.Add(preservedMeshName, preservedMeshAsset);
+                    }
+                    
+                    child.gameObject.AddComponent<MeshTopologyPreserver>().SetMesh(processedMeshes[preservedMeshName]);
                     Debug.LogError($"[Asset Importer] Preserved Topology for {mesh.Key} in {assetPath}");
                 }
             }
@@ -80,126 +79,148 @@ namespace FS.MeshProcessing.Editor
         private void ParseModelFile()
         {
             AssimpContext importer = new AssimpContext();
-            
-            var scene = importer.ImportFile(assetPath, PostProcessSteps.JoinIdenticalVertices | PostProcessSteps.GenerateNormals | PostProcessSteps.GenerateSmoothNormals);// | PostProcessSteps.MakeLeftHanded);
-            
-            // Figure out scale for vertices
-            var modelImporter = assetImporter as ModelImporter;
-            if (modelImporter == null) return;
-            
-            if (!assetPath.Contains(k_filePrefix)) return;
-            
-            m_preservedMeshes.Clear();
-            
-            float scaleFactor = modelImporter.globalScale;
-            
-            foreach (var mesh in scene.Meshes)
+
+            try
             {
-                // Check if the name ends with "Mesh"
-                string meshName = mesh.Name;
-                if (!meshName.EndsWith("Mesh")) continue;
-                
-                // Remove it
-                meshName = meshName.Substring(0, meshName.Length - 4);
-                Debug.LogError($"Attempting To Process: {meshName}");
-                if (!meshName.StartsWith(k_meshPrefix)) continue;
-                
-                var preservedMesh = new PreservedMesh();
-                preservedMesh.m_name = meshName;
-                preservedMesh.m_vertices = new Vertex[mesh.VertexCount];
-                preservedMesh.m_faces = new Face[mesh.FaceCount];
-                m_preservedMeshes.Add(meshName, preservedMesh);
-                
-                Debug.LogError($"Processing Mesh: {meshName} with {mesh.VertexCount} vertices and {mesh.FaceCount} faces.");
-                
-                HashSet<int> zeroNormalVertices = new HashSet<int>();
-                
-                // Copy vertices and normals
-                bool allZeroNormals = true;
-                for (int i = 0; i < mesh.VertexCount; i++)
-                {
-                    preservedMesh.m_vertices[i] = new Vertex();
-                    preservedMesh.m_vertices[i].m_numFaces = 0; // We'll iterate on this when parsing the faces later
-                    
-                    var v = mesh.Vertices[i];
-                    preservedMesh.m_vertices[i].m_position = scaleFactor * new Vector3(-v.X, v.Y, v.Z);
+                var scene = importer.ImportFile(assetPath,
+                    PostProcessSteps.JoinIdenticalVertices | PostProcessSteps.GenerateNormals |
+                    PostProcessSteps.GenerateSmoothNormals); // | PostProcessSteps.MakeLeftHanded);
 
-                    if (mesh.HasNormals)
+                // Figure out scale for vertices
+                var modelImporter = assetImporter as ModelImporter;
+                if (modelImporter == null) return;
+
+                if (!assetPath.Contains(k_filePrefix)) return;
+
+                m_preservedMeshes.Clear();
+
+                float scaleFactor = modelImporter.globalScale;
+                Debug.Log($"Importing w/ Scale Factor: {scaleFactor}");
+
+                foreach (var mesh in scene.Meshes)
+                {
+                    // Check if the name ends with "Mesh"
+                    string meshName = mesh.Name;
+                    //if (!meshName.EndsWith("Mesh")) continue;
+
+                    // Remove it
+                    if (meshName.EndsWith("Mesh"))
+                        meshName = meshName.Substring(0, meshName.Length - 4);
+                    Debug.LogError($"Attempting To Process: {meshName}");
+                    if (!meshName.StartsWith(k_meshPrefix)) continue;
+
+                    var preservedMesh = new PreservedMesh();
+                    preservedMesh.m_name = meshName;
+                    preservedMesh.m_vertices = new Vertex[mesh.VertexCount];
+                    preservedMesh.m_faces = new Face[mesh.FaceCount];
+                    m_preservedMeshes.Add(meshName, preservedMesh);
+
+                    Debug.LogError(
+                        $"Processing Mesh: {meshName} with {mesh.VertexCount} vertices and {mesh.FaceCount} faces.");
+
+                    HashSet<int> zeroNormalVertices = new HashSet<int>();
+
+                    // Copy vertices and normals
+                    bool allZeroNormals = true;
+                    for (int i = 0; i < mesh.VertexCount; i++)
                     {
-                        var n = mesh.Normals[i];
-                        preservedMesh.m_vertices[i].m_normal = new Vector3(-n.X, n.Y, n.Z); // TODO: From hammer x is inverted, lefthanded-ness fixes vertex position but not normals for some reason?
+                        preservedMesh.m_vertices[i] = new Vertex();
+                        preservedMesh.m_vertices[i].m_numFaces =
+                            0; // We'll iterate on this when parsing the faces later
 
-                        if (preservedMesh.m_vertices[i].m_normal is { x: <= 0, y: <= 0, z: <= 0 })
-                            zeroNormalVertices.Add(i);
-                        else allZeroNormals = false;
-                    }
-                }
-                
-                // Copy faces
-                int quadCount = 0;
-                int triCount = 0;
-                int nGonCount = 0;
-                for (int i = 0; i < mesh.FaceCount; i++)
-                {
-                    var assimpFace = mesh.Faces[i];
-                    Face face = new Face();
-                    face.m_vertexIndices = assimpFace.Indices.ToArray();
-                    
-                    preservedMesh.m_faces[i] = face;
+                        var v = mesh.Vertices[i];
+                        preservedMesh.m_vertices[i].m_position = scaleFactor * new Vector3(-v.X, v.Y, v.Z);
 
-                    foreach (var vertex in face.m_vertexIndices)
-                        preservedMesh.m_vertices[vertex].m_numFaces++;
-
-                    if (face.m_vertexIndices.Length == 3) triCount++;
-                    else if (face.m_vertexIndices.Length == 4) quadCount++;
-                    else nGonCount++;
-                }
-
-                // NOTE: In non-solid meshes, for some reason the normals are zero on import. Assuming planar quads/ngons - we'll just calculate them here
-                if (!allZeroNormals) zeroNormalVertices.Clear();
-                foreach (var vIdx in zeroNormalVertices)
-                {
-                    List<float3> accumulatedNormals = new List<float3>();
-                    // Find a faces that uses this vertex, accumulate their normals & average them
-                    foreach (var face in preservedMesh.m_faces)
-                    {
-                        if (face.m_vertexIndices.Contains(vIdx))
+                        if (mesh.HasNormals)
                         {
-                            // Calculate normal for this face
-                            if (face.m_vertexIndices.Length < 3) continue; // Can't calculate normal with less than 3 verts
-                            
-                            // Assume faces are planar, so we can just use the first 3 vertices to calculate the normal
-                            var v0 = preservedMesh.m_vertices[face.m_vertexIndices[0]].m_position;
-                            var v1 = preservedMesh.m_vertices[face.m_vertexIndices[1]].m_position;
-                            var v2 = preservedMesh.m_vertices[face.m_vertexIndices[2]].m_position;
-                            
-                            // Calculate the average face normal
-                            float3 faceNormal = math.normalize(math.cross(v2 - v1, v1 - v0));
-                            accumulatedNormals.Add(faceNormal);
+                            var n = mesh.Normals[i];
+                            preservedMesh.m_vertices[i].m_normal =
+                                Vector3.Normalize(new Vector3(-n.X, n.Y,
+                                    n.Z)); // TODO: From hammer x is inverted, lefthanded-ness fixes vertex position but not normals for some reason?
+
+                            if (preservedMesh.m_vertices[i].m_normal is { x: <= 0, y: <= 0, z: <= 0 })
+                                zeroNormalVertices.Add(i);
+                            else allZeroNormals = false;
                         }
                     }
-                    
-                    // Average the normals
-                    float3 avgNormal = float3.zero;
-                    foreach (var n in accumulatedNormals)
-                        avgNormal += n;
-                    avgNormal = math.normalize(avgNormal / accumulatedNormals.Count);
-                    
-                    // Normalize the vertex normal
-                    preservedMesh.m_vertices[vIdx].m_normal = new float3(avgNormal.x, avgNormal.y, avgNormal.z);
-                }
-                
-                preservedMesh.m_triangleCount = triCount;
-                preservedMesh.m_quadCount = quadCount;
-                preservedMesh.m_nGonCount = nGonCount;
 
-                WeldVertices(preservedMesh, smoothingAngleDegrees: modelImporter.normalSmoothingAngle);
-                
-                // TODO: this is kinda shitty and hacky but gets the job done rn for solving the non-closed mesh problem. Ideally we'd move the face normal calculation into the weld step and do it properly
-                if (allZeroNormals) SplitVerticesForHardEdges(preservedMesh, hardAngleDegrees: modelImporter.normalSmoothingAngle);
+                    // Copy faces
+                    int quadCount = 0;
+                    int triCount = 0;
+                    int nGonCount = 0;
+                    for (int i = 0; i < mesh.FaceCount; i++)
+                    {
+                        var assimpFace = mesh.Faces[i];
+                        Face face = new Face();
+                        face.m_vertexIndices = assimpFace.Indices.ToArray();
+
+                        preservedMesh.m_faces[i] = face;
+
+                        foreach (var vertex in face.m_vertexIndices)
+                            preservedMesh.m_vertices[vertex].m_numFaces++;
+
+                        if (face.m_vertexIndices.Length == 3) triCount++;
+                        else if (face.m_vertexIndices.Length == 4) quadCount++;
+                        else nGonCount++;
+                    }
+
+                    // NOTE: In non-solid meshes, for some reason the normals are zero on import. Assuming planar quads/ngons - we'll just calculate them here
+                    if (!allZeroNormals) zeroNormalVertices.Clear();
+                    foreach (var vIdx in zeroNormalVertices)
+                    {
+                        List<float3> accumulatedNormals = new List<float3>();
+                        // Find a faces that uses this vertex, accumulate their normals & average them
+                        foreach (var face in preservedMesh.m_faces)
+                        {
+                            if (face.m_vertexIndices.Contains(vIdx))
+                            {
+                                // Calculate normal for this face
+                                if (face.m_vertexIndices.Length < 3)
+                                    continue; // Can't calculate normal with less than 3 verts
+
+                                // Assume faces are planar, so we can just use the first 3 vertices to calculate the normal
+                                var v0 = preservedMesh.m_vertices[face.m_vertexIndices[0]].m_position;
+                                var v1 = preservedMesh.m_vertices[face.m_vertexIndices[1]].m_position;
+                                var v2 = preservedMesh.m_vertices[face.m_vertexIndices[2]].m_position;
+
+                                // Calculate the average face normal
+                                float3 faceNormal = math.normalize(math.cross(v2 - v1, v1 - v0));
+                                accumulatedNormals.Add(faceNormal);
+                            }
+                        }
+
+                        // Average the normals
+                        float3 avgNormal = float3.zero;
+                        foreach (var n in accumulatedNormals)
+                            avgNormal += n;
+                        avgNormal = math.normalize(avgNormal / accumulatedNormals.Count);
+
+                        // Normalize the vertex normal
+                        preservedMesh.m_vertices[vIdx].m_normal = new float3(avgNormal.x, avgNormal.y, avgNormal.z);
+                    }
+
+                    preservedMesh.m_triangleCount = triCount;
+                    preservedMesh.m_quadCount = quadCount;
+                    preservedMesh.m_nGonCount = nGonCount;
+
+                    WeldVertices(preservedMesh, smoothingAngleDegrees: modelImporter.normalSmoothingAngle);
+
+                    // TODO: this is kinda shitty and hacky but gets the job done rn for solving the non-closed mesh problem. Ideally we'd move the face normal calculation into the weld step and do it properly
+                    if (allZeroNormals)
+                        SplitVerticesForHardEdges(preservedMesh, hardAngleDegrees: modelImporter.normalSmoothingAngle);
+
+                    // Should we quadify this mesh? Try it
+                    if (mesh.Name.ToLower().Contains("tri"))
+                    {
+                        preservedMesh.Quadify();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"ASSIMP Failed to import model for preserved topology at {assetPath}: {e.Message}");
             }
         }
-        
         
         private void WeldVertices(PreservedMesh mesh, float positionTolerance = 0.0001f, float smoothingAngleDegrees = 80f)
         {

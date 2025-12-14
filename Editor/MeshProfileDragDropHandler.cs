@@ -10,8 +10,8 @@ namespace FS.MeshProcessing.Editor
         [InitializeOnLoadMethod]
         static void Load()
         {
-            DragAndDrop.AddDropHandler(OnSceneDrop);
-            DragAndDrop.AddDropHandler(OnHierarchyHandler);
+            DragAndDrop.AddDropHandlerV2(OnSceneDrop);
+            DragAndDrop.AddDropHandlerV2(OnHierarchyHandler);
         }
         
         private static DragAndDropVisualMode OnSceneDrop(Object dropUpon, Vector3 worldPosition, Vector2 viewportPosition, Transform parentForDraggedObjects, bool perform)
@@ -28,7 +28,7 @@ namespace FS.MeshProcessing.Editor
             return DragAndDropVisualMode.None;
         }
 
-        private static DragAndDropVisualMode OnHierarchyHandler(int dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+        private static DragAndDropVisualMode OnHierarchyHandler(EntityId dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
         {
             MeshProfileConfig meshProfile = DragAndDrop.objectReferences[0] as MeshProfileConfig;
             if (meshProfile)

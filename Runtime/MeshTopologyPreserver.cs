@@ -41,6 +41,9 @@ namespace FS.MeshProcessing
         public Vertex[] m_vertices;
         public HalfEdge[] m_halfEdges;
         
+        public int m_faceCount => m_faces?.Length ?? 0;
+        public int m_vertexCount => m_vertices?.Length ?? 0;
+        
         // Stats for debugging
         public int m_quadCount;
         public int m_triangleCount;
@@ -208,14 +211,17 @@ namespace FS.MeshProcessing
     
     public class MeshTopologyPreserver : MonoBehaviourGizmos
     {
-        [SerializeField, HideInInspector] private PreservedMesh m_preservedMesh;
-        public PreservedMesh PreservedMesh => m_preservedMesh;
+        [SerializeField, HideInInspector] private PreservedMeshAsset m_preservedMesh;
+        public PreservedMesh PreservedMesh => m_preservedMesh == null ? null : m_preservedMesh.Mesh;
 
-        public void SetMesh(PreservedMesh mesh)
+        public void SetMesh(PreservedMeshAsset mesh)
         {
             m_preservedMesh = mesh;
-            m_preservedMesh.ConfirmMesh();
         }
+        
+#if UNITY_EDITOR
+        public void DoGUI() => m_preservedMesh?.DoGUI();
+#endif         
 
         private void Awake()
         {

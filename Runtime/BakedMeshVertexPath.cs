@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEditor;
 using UnityEngine;
@@ -58,9 +59,9 @@ namespace FS.MeshProcessing
                 var startVertex = vertices[edge.a];
                 var endVertex = vertices[edge.b];
 
-                var startWorldPos = transform.TransformPoint(startVertex.position);
-                var endWorldPos = transform.TransformPoint(endVertex.position);
-                var normalWorld = transform.TransformDirection(startVertex.normal);
+                var startWorldPos = startVertex.position;
+                var endWorldPos = endVertex.position;
+                var normalWorld = startVertex.normal;
                 
                 var tangent = (endWorldPos - startWorldPos).normalized;
                 var rot = Quaternion.LookRotation(tangent, normalWorld);
@@ -74,7 +75,7 @@ namespace FS.MeshProcessing
             // TODO: Add last vertex as a knot as above doesnt complete it, use directionality of the knot before it as 1 point isn't enough to derive them
             var lastKnot = m_spline.Knots.Last();
             var lastVertex = vertices[m_edgeSelection.Last().b];
-            var lastWorldPos = transform.TransformPoint(lastVertex.position);
+            var lastWorldPos = lastVertex.position;
             lastKnot.Position = lastWorldPos;
             m_spline.Add(lastKnot);
         }
@@ -113,11 +114,12 @@ namespace FS.MeshProcessing
             int knotIdx = 0;
             foreach (var knot in m_spline.Knots)
             {
-                Vector3 pos = knot.Position;
+                var debugKnot = knot.Transform(transform.localToWorldMatrix);
+                Vector3 pos = debugKnot.Position;
                 Gizmos.color = Color.red;
                 Gizmos.DrawSphere(pos, 0.05f);
 
-                Quaternion nativeRot = knot.Rotation;
+                Quaternion nativeRot = debugKnot.Rotation;
                 Gizmos.color = Color.green;
                 Gizmos.DrawLine(pos, pos + 0.4f * (nativeRot * Vector3.up));
                 

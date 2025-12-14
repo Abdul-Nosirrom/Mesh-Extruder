@@ -118,10 +118,20 @@ namespace FS.MeshProcessing
             for (int smoothingIdx = 0; smoothingIdx < boundaryGroups.Count; smoothingIdx++)
             {
                 var smoothingGroup = boundaryGroups[smoothingIdx];
+                float extrusionDistance = 0f;
                 for (int xe = 0; xe < extrusionSegments.Length; xe++)
                 {
                     Matrix4x4 extrusionMatrix = extrusionSegments[xe];
                     int idxCount = smoothingGroup.Count;
+                    
+                    if (xe > 0)
+                    {
+                        // Update extrusion distance
+                        var prevExtrusionMatrix = extrusionSegments[xe - 1];
+                        var posA = prevExtrusionMatrix.MultiplyPoint(Vector3.zero);
+                        var posB = extrusionMatrix.MultiplyPoint(Vector3.zero);
+                        extrusionDistance += Vector3.Distance(posA, posB);
+                    }
                     
                     for (int be = 0; be < smoothingGroup.Count; be++)
                     {
@@ -136,7 +146,7 @@ namespace FS.MeshProcessing
 
                             Vector2 uv = new Vector2(0, 0);
                             uv.y = Vector3.Distance(p1, p2);
-                            uv.x = xe;//Vector3.Distance(p1, p2);
+                            uv.x = extrusionDistance;//Vector3.Distance(p1, p2);
                             
                             if (be != 0) 
                             {

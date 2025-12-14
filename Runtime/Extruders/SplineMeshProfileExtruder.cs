@@ -8,8 +8,17 @@ namespace FS.MeshProcessing
 {
     public class SplineMeshProfileExtruder : MeshProfileExtruder
     {
+        private enum Space
+        {
+            Local,
+            SplineContainer,
+            FirstSplinePoint
+        }
+        
         [SerializeField] 
         private SplineContainer m_splineContainer;
+        [SerializeField, HideInInspector] private int m_splineContainerID = 0;
+        
         [SerializeField] 
         private GameObject m_splineProvider;
         
@@ -17,7 +26,7 @@ namespace FS.MeshProcessing
         {
             get
             {
-                if (m_splineContainer) return m_splineContainer.Spline;
+                if (m_splineContainer && m_splineContainer.Splines.Count > 0) return m_splineContainer[Mathf.Clamp(m_splineContainerID, 0, m_splineContainer.Splines.Count - 1)];
                 if (m_splineProvider)
                 {
                     var provider = m_splineProvider.GetComponent<ISplineProvider>();

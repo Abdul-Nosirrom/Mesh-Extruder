@@ -227,6 +227,9 @@ namespace FS.MeshProcessing.Editor
     [CustomEditor(typeof(SplineMeshProfileExtruder))]
     public class SplineMeshProfileExtruderEditor : MeshProfileExtruderEditor
     {
+        private SerializedProperty m_splineContainerProp;
+        private SerializedProperty m_splineContainerIDProp;
+        
         private SerializedProperty m_splineInLocalSpace;
         private SerializedProperty m_absoluteDistance;
         
@@ -239,6 +242,10 @@ namespace FS.MeshProcessing.Editor
         protected override void OnEnable()
         {
             base.OnEnable();
+            
+            m_splineContainerProp = serializedObject.FindProperty("m_splineContainer");
+            m_splineContainerIDProp = serializedObject.FindProperty("m_splineContainerID");
+            
             m_splineInLocalSpace = serializedObject.FindProperty("m_sampleSplineLocalSpace");
             m_absoluteDistance = serializedObject.FindProperty("m_useAbsoluteDistance");
 
@@ -254,9 +261,14 @@ namespace FS.MeshProcessing.Editor
             
             var extruder = target as SplineMeshProfileExtruder;
             if (extruder?.m_spline == null) return;
+            
+            serializedObject.Update();
+            
+            if (m_splineContainerProp.objectReferenceValue is SplineContainer splineContainer)
+                m_splineContainerIDProp.intValue = EditorGUILayout.IntSlider("Spline Container Index:", m_splineContainerIDProp.intValue, 0, splineContainer.Splines.Count - 1);
+            
 
             var length = extruder.m_spline.CalculateLength(extruder.transform.localToWorldMatrix);
-            serializedObject.Update();
 
             if (ToggleButton("Spline In Local Space", m_splineInLocalSpace.boolValue))
             {

@@ -217,10 +217,10 @@ namespace FS.MeshProcessing
                 var edge = mesh.m_halfEdges[m_selectedEdges[knotIdx]];
                 if (edge == null) continue;
 
-                var v0 = transform.TransformPoint(mesh.m_vertices[edge.Vertex].m_position);
-                var v1 = transform.TransformPoint(mesh.m_vertices[edge.Next.Vertex].m_position);
+                var v0 = (Vector3)mesh.m_vertices[edge.Vertex].m_position;
+                var v1 = (Vector3)mesh.m_vertices[edge.Next.Vertex].m_position;
 
-                var normal = transform.TransformDirection(mesh.m_vertices[edge.Vertex].m_normal).normalized;
+                var normal = ((Vector3)mesh.m_vertices[edge.Vertex].m_normal).normalized;
                 var tangent = (v1 - v0).normalized;
                 normal = Quaternion.AngleAxis(m_normalRotationOffset, tangent) * normal;
 
@@ -245,7 +245,7 @@ namespace FS.MeshProcessing
             if (isClosedLoop)
                 Debug.LogError($"[Edge Loop] Mesh is a closed loop, setting spline to closed.");
             
-            mvp.SetVertexPath(knots);
+            mvp.SetLocalSpaceVertexPath(knots);
             mvp.m_spline.Closed = isClosedLoop;
         }
 
@@ -326,6 +326,7 @@ namespace FS.MeshProcessing
             var mesh = m_mesh.PreservedMesh;
             foreach (var edgeIdx in m_selectedEdges)
             {
+                if (edgeIdx < 0 || edgeIdx >= mesh.m_halfEdges.Length) continue; // Could be a reimport of the mesh and stored indices are invalid
                 var edge = mesh.m_halfEdges[edgeIdx];
                 if (edge == null) continue;
                 
